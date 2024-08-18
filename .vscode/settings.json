@@ -1,0 +1,15 @@
+{
+    "makefile.makePath": "nmake",
+    "C_Cpp.errorSquiggles": "disabled",
+    "files.associations": {
+        "xiosbase": "cpp",
+        "set": "cpp",
+        "xhash": "cpp",
+        "xtree": "cpp",
+        "iterator": "cpp",
+        "xmemory": "cpp",
+        "random": "cpp",
+        "queue": "cpp"
+    },
+    "makefile.configureOnOpen": false
+}
