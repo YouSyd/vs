@@ -150,7 +150,9 @@ int streamer_room_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
 
     char fortunegift_clip_img[256]={0};
     char eh_img_name[256]={0};
-    sprintf(fortunegift_clip_img,"./pics/%d.png",(int)FORTUNEGIFT_OR_DIAMOND_RANGE);
+    char path[256]={0};
+    GetModulePath(path);
+    sprintf(fortunegift_clip_img,"%spics\\%d.png",path,(int)FORTUNEGIFT_OR_DIAMOND_RANGE);
     ImgEnhanceBeforeOCR(fortunegift_clip_img,eh_img_name);
     
     int has_diamond=(searchtemplate(fortunegift_clip_img,DIAMOND_CLICKRECT,trz)==0?1:0);
@@ -397,7 +399,10 @@ int fg_draw_jackpot_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
     time_t now=time(NULL);
     struct tm* local=localtime(&now);
     char award_name[256]="";
-    sprintf(award_name,"./pics/award/%04d_%02d_%02d_%02d_%02d_%02d.png",
+    char path[256]={0};
+    GetModulePath(path);
+    sprintf(award_name,"%spics\\award\\%04d_%02d_%02d_%02d_%02d_%02d.png",
+        path,
         local->tm_year+1900,local->tm_mon+1,local->tm_mday,
         local->tm_hour,local->tm_min,local->tm_sec
     );
@@ -476,7 +481,9 @@ int ClipTRZ(Pix* pix,pTRZ trz) {
     } else {
         //写入文件
         char clip_file[256]={0};
-        sprintf(clip_file,"./pics/%d.png",(int)trz->code);
+        char path[256]={0};
+        GetModulePath(path);
+        sprintf(clip_file,"%spics\\%d.png",path,(int)trz->code);
         if(0!=pixWrite(clip_file,clipImg,IFF_PNG)) {
             printf("裁剪图片写入文件%s 失败\n",clip_file);
         } else {
@@ -506,8 +513,10 @@ int ClipTRZ(Pix* pix,pTRZ trz,char* clip_file) {
     if(clipImg==NULL) {
         printf("图片裁剪失败\n");
     } else {
+        char path[256]={0};
+        GetModulePath(path);
         //写入文件
-        if(clip_file[0]=='\0') sprintf(clip_file,"./pics/%d.png",(int)trz->code);
+        if(clip_file[0]=='\0') sprintf(clip_file,"%spics\\%d.png",path,(int)trz->code);
         if(0!=pixWrite(clip_file,clipImg,IFF_PNG)) {
             printf("裁剪图片写入文件%s 失败\n",clip_file);
         } else {
@@ -624,7 +633,9 @@ int InitialSections(tesseract::TessBaseAPI* api,Pix* pix,pTRZ trz) {
             }
             if((trz+idx)->code==STREAMER) {
                 char eh_name[256]="";
-                sprintf(eh_name,"./pics/%d.png",(int)STREAMER);
+                char path[256]={0};
+                GetModulePath(path);
+                sprintf(eh_name,"%spics\\%d.png",path,(int)STREAMER);
                 TRZ rtmp;
                 memcpy(&rtmp,trz+idx,sizeof(rtmp));
                 rtmp.x=rtmp.y=0;
@@ -709,9 +720,18 @@ int getehimagename(const char* img_name,char* eh_name) {
 
 int searchtemplate(const char* source_img,TRZCODE code,pTRZ list) {
     char template_imgs[][256]={
-        "./pics/diamond_template.png",
-        "./pics/gift_template.png"
+        "pics\\diamond_template.png",
+        "pics\\gift_template.png"
     };
+
+    char path[256]={0};
+    GetModulePath(path);
+    for(int idx=0;idx<sizeof(template_imgs)/sizeof(char[256]);idx++) {
+        char tmp[256]={0};
+        sprintf(tmp,"%s%s",path,template_imgs[idx]);
+        strcpy(template_imgs[idx],tmp);
+    }
+
     char* template_img=NULL;
     
     switch((int)code) {
@@ -776,7 +796,11 @@ int searchtemplate(const char* source_img,TRZCODE code,pTRZ list) {
         cv::rectangle(source,matchLoc,cv::Point(matchLoc.x+templt.cols,
             matchLoc.y+templt.rows),cv::Scalar::all(250),2,8,0);
         
-        cv::imwrite("./pics/searched.png",source);
+        char path[256]={0};
+        GetModulePath(path);
+        char searched_file[256]={0};
+        sprintf(searched_file,"%spics\\searched.png",path);
+        cv::imwrite(searched_file,source);
         
         return 0;
     } else {
@@ -886,12 +910,21 @@ PAGECODE GetPageCode(tesseract::TessBaseAPI* api,const char* source_img,pTRZ lis
     //请勿随意调整以下模板文件、页面代码、搜索区域的顺序，
     //顺序经过设计，即便同步调整也可能会导致错误。
     char template_imgs[][256]={
-        "./pics/fortunegift_draw_jackpot_template.png",//中奖模板图
-        "./pics/fortunegift_draw_noprize_template.png",//未中奖模板图
-        "./pics/streamer_room_template.png",
-        "./pics/fortunegift_detail_template.png",
-        "./pics/diamond_detail_template.png",
+        "pics\\fortunegift_draw_jackpot_template.png",//中奖模板图
+        "pics\\fortunegift_draw_noprize_template.png",//未中奖模板图
+        "pics\\streamer_room_template.png",
+        "pics\\fortunegift_detail_template.png",
+        "pics\\diamond_detail_template.png",
     };
+
+    char path[256]={0};
+    GetModulePath(path);
+    for(int idx=0;idx<sizeof(template_imgs)/sizeof(char[256]);idx++) {
+        char tmp[256]={0};
+        sprintf(tmp,"%s%s",path,template_imgs[idx]);
+        strcpy(template_imgs[idx],tmp);
+    }
+
     //页面代码
     PAGECODE pages[]={
         FORTUNEGIFT_JACKPOT,//福袋中奖界面
@@ -1016,7 +1049,13 @@ DWORD WINAPI DouYinOCRJOB(LPVOID lParam) {
 void Flows() {
     GMajor=(pMajor)calloc(sizeof(Major),1);
     if(GMajor==NULL) return;
-    
+
+    char path[256]={0};
+    GetModuleFileName(NULL,path,sizeof(path));
+    if(strrchr(path,'\\')) {
+        char* plt=strrchr(path,'\\');
+        *(plt+1)='\0';
+    }
     
     //参数初始化
     int sections_size=sizeof(sections)/sizeof(TRZ);
@@ -1025,7 +1064,7 @@ void Flows() {
     GMajor->trz=trz;
     tesseract::TessBaseAPI* api=new tesseract::TessBaseAPI();
     
-    pwfpj_param wfpj=(pwfpj_param)f->extra;;
+    pwfpj_param wfpj=(pwfpj_param)f->extra;
 
     //根据页面类型确定执行页面切换的策略
     int refresh_flag=1;
@@ -1033,7 +1072,10 @@ void Flows() {
         //1. 捕捉图像
         int retry_count=0;
         while(retry_count<=5) {
-            char cmd3[256]="adb exec-out screencap -p > ./pics/x.png";
+            char img_fullpath[256]={0};
+            sprintf(img_fullpath,"%s%s",path,"pics\\x.png");
+            char cmd3[256]={0};
+            sprintf(cmd3,"adb exec-out screencap -p > %s",img_fullpath);
             if(0!=subproc_execmd((char*)"cmd",(char*)cmd3)) {retry_count++;printf("Command Execution failed.\n");Sleep(1000);}
             else break;
                 
@@ -1060,8 +1102,27 @@ void Flows() {
  */
 PAGECODE PageAnalysis(tesseract::TessBaseAPI* api,pTRZ trz) {
     char img_file[][256]={
-        "./pics/x.png"
+        //"pics\\x.png"
+        "pics\\x.png"
     };
+
+    char path[256]={0};
+    GetModulePath(path);
+    for(int idx=0;idx<sizeof(img_file)/sizeof(char[256]);idx++) {
+        char tmp[256]={0};
+        sprintf(tmp,"%s%s",path,img_file[idx]);
+        strcpy(img_file[idx],tmp);
+    }
+    //MessageBox(NULL,"PageAnalysis","",MB_OK);
+
+    // char path[256]={0};
+    // GetModulePath(path);
+    // for(int idx=0;idx<sizeof(img_file)/sizeof(char[256]);idx++) {
+    //     char tmp[256]={0};
+    //     sprintf(tmp,"%s%s",path,path,img_file[idx]);
+    //     strcpy(img_file[idx],tmp);
+    // }
+
     int idx=0;
     PAGECODE page=GetPageCode(api,img_file[idx],trz);
     
@@ -1097,6 +1158,18 @@ PAGECODE PageAnalysis(tesseract::TessBaseAPI* api,pTRZ trz) {
     return page;
 }
 
+int GetModulePath(char* path) {
+    char fullpath[MAX_PATH]={0};
+
+    if(GetModuleFileName(NULL,fullpath,MAX_PATH)!=0) {
+        char* plt=strrchr(fullpath,'\\');
+        if(plt) {
+            strncpy(path,fullpath,plt-&fullpath[0]+1);
+            return 0;
+        }
+    }
+    return -1;
+}
 /*
  * 获取下一个页面的策略
  * 这里可以有很多种策略，比如在一个直播间持续蹲守，
@@ -1155,17 +1228,23 @@ int NextPageStrategies_TRACEONE(pTRZ trz,PAGECODE currpage) {
          * 如果两个任务都是已经完成的，点击参与不会自动退出当前页面
          * 该界面的下一步界面需要切回 直播间
          */
-         
+        
+        char path[256]={0};
+        GetModulePath(path);
         //截图，检查当前页面
         int retry_count=0;
         while(retry_count<=5) {
-            char cmd3[256]="adb exec-out screencap -p > ./pics/x.png";
+            char cmd3[256]={0};
+            sprintf(cmd3,"adb exec-out screencap -p > %spics\\x.png",path);
             if(0!=subproc_execmd((char*)"cmd",(char*)cmd3)) {retry_count++;printf("Command Execution failed.\n");Sleep(1000);}
             else break;
                 
             Sleep(105);
         }
-        PAGECODE page=GetPageCode("./pics/x.png",trz);
+
+        char imagepath[256]={0};
+        sprintf(imagepath,"%spics\\x.png",path);
+        PAGECODE page=GetPageCode(imagepath,trz);
         if(page==FORTUNEGIFT_DETAIL_2TASK) {
             pTRZ trz_fodr=gettrzbycode(trz,FORTUNEGIFT_OR_DIAMOND_RANGE);
             if(!trz_fodr) return -1;
