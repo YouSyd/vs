@@ -114,6 +114,8 @@ TRZ sections[]={
     
     //----------------------------------------------------
     //福袋抽奖结果界面-中奖 
+    // 福袋中奖页面 只有 DOU_FORTUNEGIFT_DRAW_JACKPOT_POPUP 、DOU_FORTUNEGIFT_DRAW_JACKPOT_CLOSEBTN 是可用坐标
+    // 其余坐标需要推算
     {
         115,430,500,80,DOU_FORTUNEGIFT_DRAW_JACKPOT_IMG,NULL,FORTUNEGIFT_JACKPOT,
     },
@@ -121,17 +123,31 @@ TRZ sections[]={
         110,497,505,103,DOU_FORTUNEGIFT_DRAW_JACKPOT_PRIZEDESC,NULL,FORTUNEGIFT_JACKPOT,
     },
     {
-        115,875,500,80,DOU_FORTUNEGIFT_DRAW_JACKPOT_CFMAWARD,NULL,FORTUNEGIFT_JACKPOT,
+        110,820,500,100,DOU_FORTUNEGIFT_DRAW_JACKPOT_CFMAWARD,NULL,FORTUNEGIFT_JACKPOT,
     },
     {
-        140,980,46,42,DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO,NULL,FORTUNEGIFT_JACKPOT,
+        139,942,50,44,DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO,NULL,FORTUNEGIFT_JACKPOT,
     },
-    
-    
+    {
+        338,1069,44,42,DOU_FORTUNEGIFT_DRAW_JACKPOT_CLOSEBTN,NULL,FORTUNEGIFT_JACKPOT,
+    },
+    {
+        74,395,573,637,DOU_FORTUNEGIFT_DRAW_JACKPOT_POPUP,NULL,FORTUNEGIFT_JACKPOT,
+    },
+
     //----------------------------------------------------
     //直播间 已经关闭
     {
         254,120,213,49,STREAMER_ROOMCLOSED_IMG,NULL,STREAMER_ROOMCLOSED,
+    },
+
+    //----------------------------------------------------
+    //福袋中奖后领奖界面
+    {
+        2,48,718,109,DOU_FORTUNEGIFT_AWARDFORTUNEGIFT_IMG,NULL,FORTUNEGIFT_AFMAWARD,
+    },
+    {
+        452,1410,237,83,DOU_FORTUNEGIFT_AWARDFORTUNEGIFT_AFMBTN,NULL,FORTUNEGIFT_AFMAWARD,
     },
 };
 
@@ -177,6 +193,8 @@ int streamer_room_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
         trz_fc->x=trz_fodr->x+trz_fc->x;
         trz_fc->y=trz_fodr->y+trz_fc->y;
         TextTRZ(api,img,trz_fc);
+        trz_fc->x-=trz_fodr->x;
+        trz_fc->y-=trz_fodr->y;
     }
     
     if(has_diamond==1) {
@@ -196,6 +214,8 @@ int streamer_room_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
         trz_dc->x=trz_fodr->x+trz_dc->x;
         trz_dc->y=trz_fodr->y+trz_dc->y;
         TextTRZ(api,img,trz_dc);
+        trz_dc->x-=trz_fodr->x;
+        trz_dc->y-=trz_fodr->y;
     }
     
     pTRZ trz_streamer=gettrzbycode(trz,STREAMER);
@@ -232,9 +252,13 @@ int fg_detail_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
         printf("福袋详情-识别福袋详情页面出错：未能取到倒计时\n");
         goto fg_detail_ocr_exit;
     }
+    /*
+     * 此处有猫腻
+     */
     trz_cd1->y+=48;trz_cd2->y+=48;
     TextTRZ(api,img,trz_cd1);
     TextTRZ(api,img,trz_cd2);
+    trz_cd1->y-=48;trz_cd2->y-=48;
     printf("倒计时[%s:%s]\n",trz_cd1->pText,trz_cd2->pText);
     
     int minutes=0,seconds=0;
@@ -257,6 +281,7 @@ int fg_detail_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
     }
     trz_fdt->y+=48;
     TextTRZ(api,img,trz_fdt);
+    trz_fdt->y-=48;
     printf("福袋内容[%s]\n",trz_fdt->pText);
     GMajor->fg_desc=trz_fdt->pText;
     
@@ -282,6 +307,7 @@ int fg_detail_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
     trz_tk1->y+=48;
     //TextTRZ(api,img,trz_tk1);
     TextTRZEh(api,img_file,trz_tk1);//使用处理后的图片提高识别准确率
+    trz_tk1->y-=48;
     if(trz_tk1->pText) printf("任务1[%s]\n",trz_tk1->pText);
     GMajor->taskstatus[0]=((strstr(trz_tk1->pText,"已达成"))?1:0);    
     
@@ -395,6 +421,7 @@ fg_detail_2task_ocr_exit:
 int fg_draw_jackpot_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
     printf("中奖页面.\n");
     
+    int ret=-1;
     //将中奖图片存入文件夹 ./pics/award/
     time_t now=time(NULL);
     struct tm* local=localtime(&now);
@@ -408,9 +435,85 @@ int fg_draw_jackpot_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
     );
     CopyFile(img_file,award_name,TRUE);
     
-    //...
+    /*
+     * 由于领奖按钮 和 确认协议的 checkbox 的位置不确定
+     * 此处需要查找修正
+     * 首先裁剪出popup
+     * 继而在裁剪的popup上寻找相关的 afmbtn/proto_checkbox
+     */
+    pTRZ trz_popup=gettrzbycode(trz,DOU_FORTUNEGIFT_DRAW_JACKPOT_POPUP);
+    if(!trz_popup) {
+        printf("获取选区DOU_FORTUNEGIFT_DRAW_JACKPOT_POPUP失败。\n");
+        goto fg_draw_jackpot_ocr_exit;
+    }
+    //裁剪
+    char clip_file[256]={0};
+    //对图像指定区域裁切保存
+    Pix* pixSource=pixRead(img_file);
+    ClipTRZ(pixSource,trz,clip_file);
+    pixDestroy(&pixSource);
     
-    return 0;
+    pTRZ trz_affimbtn=gettrzbycode(trz,DOU_FORTUNEGIFT_DRAW_JACKPOT_CFMAWARD,0);
+    if(!trz_affimbtn) {
+        printf("获取选区 DOU_FORTUNEGIFT_DRAW_JACKPOT_CFMAWARD 失败。\n");
+        goto fg_draw_jackpot_ocr_exit;
+    }
+    if(searchtemplate(clip_file,DOU_FORTUNEGIFT_DRAW_JACKPOT_CFMAWARD,trz_affimbtn)!=0) {
+        printf("查找匹配的领奖确认按钮失败.\n");
+        goto fg_draw_jackpot_ocr_exit;
+    } else {
+        /*
+         * 修正相对坐标的DOU_FORTUNEGIFT_DRAW_JACKPOT_CFMAWARD
+         */
+        trz_affimbtn->x+=trz_popup->x;trz_affimbtn->y+=trz_popup->y;
+    }
+    
+    pTRZ trz_proto=gettrzbycode(trz,DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO,0);
+    if(!trz_proto) {
+        printf("获取选区 DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO 失败。\n");
+        goto fg_draw_jackpot_ocr_exit;
+    }
+    pTRZ trz_proto_checked=gettrzbycode(trz,DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO_CHECKED,0);
+    if(!trz_proto_checked) {
+        printf("获取选区 DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO_CHECKED 失败。\n");
+        goto fg_draw_jackpot_ocr_exit;
+    }
+    
+    /*
+    * 未找到 同意协议（未选中）的checkbox
+    * 判定为 同意协议（已选中）
+    * 此处进一步识别确认
+    */   
+    int isproto_checked=-1;
+    if(searchtemplate(clip_file,DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO,trz_proto)==0) {
+        isproto_checked=0;
+    } else {
+        if(searchtemplate(clip_file,DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO_CHECKED,trz_proto_checked)==0) {
+            isproto_checked=1;
+        }
+    }
+    GMajor->proto_checked=isproto_checked;
+
+    if(isproto_checked==-1) {
+        printf("判定是否点选同意协议失败.\n");
+        goto fg_draw_jackpot_ocr_exit;
+    } else {
+        /*
+         * 更新 trz_proto、trz_proto_checked
+         */
+        if(isproto_checked==0) {
+            trz_proto->x+=trz_popup->x;trz_proto->y+=trz_popup->y;
+            trz_proto_checked->x=trz_proto->x;trz_proto_checked->y=trz_proto->y;
+            trz_proto_checked->width=trz_proto->width;trz_proto_checked->height=trz_proto->height;
+        } else {
+            trz_proto_checked->x+=trz_popup->x;trz_proto_checked->y+=trz_popup->y;
+            trz_proto->x=trz_proto_checked->x;trz_proto->y=trz_proto_checked->y;
+            trz_proto->width=trz_proto_checked->width;trz_proto->height=trz_proto_checked->height;
+        }
+    }
+    ret=0;
+fg_draw_jackpot_ocr_exit:
+    return ret;
 }
 
 /*
@@ -588,21 +691,55 @@ int TextTRZExtra(pTRZ trz) {
 
 int TextTRZ(tesseract::TessBaseAPI* api,Pix* pix,pTRZ trz,int clip_flag) {
     if(clip_flag!=0) ClipTRZ(pix,trz);  
-    
+
+    //获取图片高宽
+    int img_width=pixGetWidth(pix);
+    int img_height=pixGetHeight(pix);
+
+    if(img_width<=0||img_height<=0) return -1;
+
+    //检查TRZ设置选区是否合法
+    if(clip_flag!=0) {
+        if(trz->x<0||trz->x>=img_width||
+            trz->y<0||trz->y>=img_height||
+            trz->x+trz->width>img_width||
+            trz->y+trz->height>img_height
+        ) {
+            if(f->extra) {
+                pwfpj_param wfpj=(pwfpj_param)f->extra;
+                SendMessage(wfpj->imgsratch,MSG_SECTIONSETTINGS,(WPARAM)trz,(LPARAM)trz->code);
+            } 
+        }
+    } else {
+        if(trz->width<=0||trz->width>img_width||
+            trz->height<=0||trz->height>img_height
+        ) {
+            if(f->extra) {
+                pwfpj_param wfpj=(pwfpj_param)f->extra;
+                SendMessage(wfpj->imgsratch,MSG_SECTIONSETTINGS,(WPARAM)trz,(LPARAM)trz->code);
+            } 
+        }
+    }
+
     //设置api的traindata  
     if(trz->traindata[0]=='\0') strcpy(trz->traindata,"chi_sim");
     if(api->Init(datapath,trz->traindata)) {
         printf("Initial Tesseract failed.\n");
         return -1;
     }
-    
+
     //加载图片
     api->SetImage(pix);
     
     //设置tessedit_char_whitelist参数
     if(trz->whitelist[0]!='\0')  api->SetVariable("tessedit_char_whitelist",trz->whitelist);
     else api->SetVariable("tessedit_char_whitelist", "");
-        
+
+    if(trz->pText) {
+        free(trz->pText);
+        trz->pText=NULL;
+    }
+
     int result;
     if(clip_flag!=0) result=TextRectOCR(api,trz->x,trz->y,trz->width,trz->height,&(trz->pText));
     else result=TextRectOCR(api,0,0,trz->width,trz->height,&(trz->pText));
@@ -721,7 +858,10 @@ int getehimagename(const char* img_name,char* eh_name) {
 int searchtemplate(const char* source_img,TRZCODE code,pTRZ list) {
     char template_imgs[][256]={
         "pics\\diamond_template.png",
-        "pics\\gift_template.png"
+        "pics\\gift_template.png",
+        "pics\\fortunegift_award_template.png",
+        "pics\\fortunegift_protunchecked_template.png",
+        "pics\\fortunegift_protchecked_template.png"
     };
 
     char path[256]={0};
@@ -740,6 +880,15 @@ int searchtemplate(const char* source_img,TRZCODE code,pTRZ list) {
         break;
     case FORTUNEGIFT_CLICKRECT:
         template_img=&template_imgs[1][0];
+        break;
+    case DOU_FORTUNEGIFT_DRAW_JACKPOT_CFMAWARD: 
+        template_img=&template_imgs[2][0];
+        break;
+    case DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO:
+        template_img=&template_imgs[3][0];
+        break;
+    case DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO_CHECKED:
+        template_img=&template_imgs[4][0];
         break;
     }
     
@@ -786,8 +935,8 @@ int searchtemplate(const char* source_img,TRZCODE code,pTRZ list) {
         width=templt.cols;
         height=templt.rows;
         
-        pTRZ trz=gettrzbycode(list,code);
-        if(trz) { 
+        pTRZ trz=gettrzbycode(list,code,0);
+        if(trz) {
             trz->x=x;trz->y=y;trz->width=width;trz->height=height;
         }
         //printf("找到匹配位置:(%d,%d) %d×%d\n",x,y,width,height);
@@ -874,8 +1023,7 @@ int searchtemplate2(const char* source_img,const char* template_img) {
 }
 /* -------------------------------------------------- */
 
-
-pTRZ gettrzbycode(pTRZ list,TRZCODE code) {
+pTRZ gettrzbycode(pTRZ list,TRZCODE code,int checktrz) {
     if(list==NULL) return NULL;
      
     int length=_msize(list)/sizeof(TRZ);
@@ -886,7 +1034,7 @@ pTRZ gettrzbycode(pTRZ list,TRZCODE code) {
                 /*
                  * 发送消息
                  */
-                if(f&&f->extra) {
+                if(checktrz==1&&f->extra) {
                     pwfpj_param wfpj=(pwfpj_param)f->extra;
                     SendMessage(wfpj->imgsratch,MSG_SECTIONSETTINGS,(WPARAM)section,(LPARAM)code);
                 }
@@ -898,6 +1046,10 @@ pTRZ gettrzbycode(pTRZ list,TRZCODE code) {
     return NULL;
 }
 
+pTRZ gettrzbycode(pTRZ list,TRZCODE code) {
+    return gettrzbycode(list,code,1);
+}
+
 PAGECODE GetPageCode(const char* source_img,pTRZ list) {
     return GetPageCode(NULL,source_img,list);
 }
@@ -905,7 +1057,7 @@ PAGECODE GetPageCode(const char* source_img,pTRZ list) {
  * 识别当前页面代码
  */
 PAGECODE GetPageCode(tesseract::TessBaseAPI* api,const char* source_img,pTRZ list) {
-    
+    pwfpj_param wfpj=(pwfpj_param)f->extra;
     //页面标志图
     //请勿随意调整以下模板文件、页面代码、搜索区域的顺序，
     //顺序经过设计，即便同步调整也可能会导致错误。
@@ -915,6 +1067,7 @@ PAGECODE GetPageCode(tesseract::TessBaseAPI* api,const char* source_img,pTRZ lis
         "pics\\streamer_room_template.png",
         "pics\\fortunegift_detail_template.png",
         "pics\\diamond_detail_template.png",
+        "pics\\fortunegift_afmaward_template.png",
     };
 
     char path[256]={0};
@@ -932,6 +1085,7 @@ PAGECODE GetPageCode(tesseract::TessBaseAPI* api,const char* source_img,pTRZ lis
         STREAMER_ROOM,
         FORTUNEGIFT_DETAIL,
         DIAMOND_DETAIL,
+        FORTUNEGIFT_AFMAWARD,
     };
     //主图待搜索区域
     TRZCODE zones[]={
@@ -940,6 +1094,7 @@ PAGECODE GetPageCode(tesseract::TessBaseAPI* api,const char* source_img,pTRZ lis
         STREAMER_ROOM_IMG,
         DOU_FORTUNEGIFT_DETAIL_IMG,
         DOU_DIAMOND_DETAIL_IMG,
+        DOU_FORTUNEGIFT_AWARDFORTUNEGIFT_IMG,
     };
         
     char* template_img=NULL;
@@ -959,6 +1114,7 @@ PAGECODE GetPageCode(tesseract::TessBaseAPI* api,const char* source_img,pTRZ lis
             
         if(source.empty()||templt.empty()) {
             printf("加载图片[%s]或者模板图片[%s]失败\n",source_img,template_img);
+            if(wfpj->workflow) SendMessage(wfpj->workflow,MSG_NODELIGHTING,(WPARAM)UNKNOWN_PAGE,(LPARAM)0);
             return UNKNOWN_PAGE;
         }
         
@@ -1002,6 +1158,7 @@ PAGECODE GetPageCode(tesseract::TessBaseAPI* api,const char* source_img,pTRZ lis
             
             //printf("source img:%s,template img:%s,",source_img,template_img);
             //printf("匹配最佳位置的方差:%lf\n",maxVal);
+            if(wfpj->workflow) SendMessage(wfpj->workflow,MSG_NODELIGHTING,(WPARAM)code,(LPARAM)0);
             return code;
         }  
     }
@@ -1019,9 +1176,11 @@ PAGECODE GetPageCode(tesseract::TessBaseAPI* api,const char* source_img,pTRZ lis
     }
         
     if(strstr(trz_rc->pText,"直播已结束")) {
+        if(wfpj->workflow) SendMessage(wfpj->workflow,MSG_NODELIGHTING,(WPARAM)STREAMER_ROOMCLOSED,(LPARAM)0);    
         return STREAMER_ROOMCLOSED;
     }
-    
+
+    if(wfpj->workflow) SendMessage(wfpj->workflow,MSG_NODELIGHTING,(WPARAM)UNKNOWN_PAGE,(LPARAM)0);    
     return UNKNOWN_PAGE;
 }
 
@@ -1046,6 +1205,22 @@ DWORD WINAPI DouYinOCRJOB(LPVOID lParam) {
     return 0;
 }
 
+BOOL IsThreadSuspended(HANDLE threadHandle) {
+    NtQueryInformationThreadFunc NtQueryInformationThread =
+        (NtQueryInformationThreadFunc)GetProcAddress(
+            GetModuleHandleA("ntdll.dll"),"NtQueryInformationThread");
+
+    if(!NtQueryInformationThread) return FALSE;
+
+    THREAD_BASIC_INFORMATION tbi;
+    NTSTATUS status=NtQueryInformationThread(threadHandle,(THREADINFOCLASS)0,&tbi,sizeof(tbi),NULL);
+
+    if(status==0&&tbi.SuspendCount>0) {
+        return TRUE; // 线程被挂起
+    }
+    return FALSE; // 线程未被挂起
+}
+
 void Flows() {
     GMajor=(pMajor)calloc(sizeof(Major),1);
     if(GMajor==NULL) return;
@@ -1063,8 +1238,6 @@ void Flows() {
     memcpy(trz,sections,sizeof(sections));
     GMajor->trz=trz;
     tesseract::TessBaseAPI* api=new tesseract::TessBaseAPI();
-    
-    pwfpj_param wfpj=(pwfpj_param)f->extra;
 
     //根据页面类型确定执行页面切换的策略
     int refresh_flag=1;
@@ -1084,10 +1257,14 @@ void Flows() {
         
         //2.分析图像界面，识别页面，并解析页面内容
         PAGECODE page=PageAnalysis(api,trz);
-        if(wfpj->workflow) SendMessage(wfpj->workflow,MSG_NODELIGHTING,(WPARAM)page,(LPARAM)0);
 
         //3. 确定下一个页面
-        NextPageStrategies_TRACEONE(trz,page);
+        if(0!=NextPageStrategies_TRACEONE(trz,page)) {
+            /*
+             * 页面跳转出现了异常
+             */
+            break;
+        }
     }
     
 
@@ -1152,16 +1329,32 @@ PAGECODE PageAnalysis(tesseract::TessBaseAPI* api,pTRZ trz) {
     case DIAMOND_DETAIL: 
         //diamond_detail_ocr(api,trz,img_file[idx]);
     break;
+    case FORTUNEGIFT_AFMAWARD:
+        //...
+    break;
     default: 
         printf("Unknown PAGE,image file [%s]\n",img_file[idx]);
-    }
+        /*
+         * 将图像写入 pics/unknown/
+         */
+        char unknown_file[256]={0};
+        time_t rawtime;
+        struct tm* tminfo;
+        char tm_buffer[256]={0};
+        time(&rawtime);
+        tminfo=localtime(&rawtime);
+        strftime(tm_buffer,sizeof(tm_buffer),"%Y_%m_%d_%H_%M_%S",tminfo);
+
+        sprintf(unknown_file,"%spics\\unknown\\%s.png",path,tm_buffer);
+        CopyFile(img_file[idx],unknown_file,FALSE);
+    }    
     return page;
 }
 
 int GetModulePath(char* path) {
     char fullpath[MAX_PATH]={0};
 
-    if(GetModuleFileName(NULL,fullpath,MAX_PATH)!=0) {
+    if(GetModuleFileName((HMODULE)f->inst,fullpath,MAX_PATH)!=0) {
         char* plt=strrchr(fullpath,'\\');
         if(plt) {
             strncpy(path,fullpath,plt-&fullpath[0]+1);
@@ -1206,10 +1399,12 @@ int NextPageStrategies_TRACEONE(pTRZ trz,PAGECODE currpage) {
             Sleep(30*1000);
         }
     } break;
-    case FORTUNEGIFT_DETAIL: {} break;
+    case FORTUNEGIFT_DETAIL: 
     case FORTUNEGIFT_DETAIL_2TASK: {
+        int task_count=2;
+        if(currpage==FORTUNEGIFT_DETAIL) task_count=1;
         //检查任务是否已经执行
-        for(int idx=0;idx<2;idx++) {
+        for(int idx=0;idx<task_count;idx++) {
             printf("任务%d:%s\n",idx+1,GMajor->taskstatus[idx]==0?"未完成":"已完成");
             if(GMajor->taskstatus[idx]==0) {
                 //执行参与
@@ -1245,7 +1440,7 @@ int NextPageStrategies_TRACEONE(pTRZ trz,PAGECODE currpage) {
         char imagepath[256]={0};
         sprintf(imagepath,"%spics\\x.png",path);
         PAGECODE page=GetPageCode(imagepath,trz);
-        if(page==FORTUNEGIFT_DETAIL_2TASK) {
+        if(page==FORTUNEGIFT_DETAIL_2TASK||page==FORTUNEGIFT_DETAIL) {
             pTRZ trz_fodr=gettrzbycode(trz,FORTUNEGIFT_OR_DIAMOND_RANGE);
             if(!trz_fodr) return -1;
             pTRZ trz_fc=gettrzbycode(trz,FORTUNEGIFT_CLICKRECT);
@@ -1265,6 +1460,13 @@ int NextPageStrategies_TRACEONE(pTRZ trz,PAGECODE currpage) {
         printf("开始休眠，预计福袋在%d秒后[%s]开奖.\n",GMajor->fg_countdown,time_str);
         int countdown_seconds=GMajor->fg_countdown+GMajor->timestamp-time(NULL);
         if(countdown_seconds>=30) {
+            /*
+             * 设置倒计时
+             */
+            if(f->extra) {
+                pwfpj_param wfpj=(pwfpj_param)(f->extra);
+                SetTimer(wfpj->workflow,FGCOUNTDOWN_TIMERID,750,NULL);
+            }
             Sleep((countdown_seconds+1)*1000);
         } else if(countdown_seconds>0) {
             //切回主界面等待30秒
@@ -1290,7 +1492,36 @@ int NextPageStrategies_TRACEONE(pTRZ trz,PAGECODE currpage) {
         subproc_execmd(NULL,cmd_tapfg);
         Sleep(1400);
     } break;
-    case FORTUNEGIFT_JACKPOT: {} break;
+    case FORTUNEGIFT_JACKPOT: {
+        if(GMajor->proto_checked==0) {
+            pTRZ trz_proto=gettrzbycode(trz,DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO);
+            if(!trz_proto) return -1;
+
+            char cmd_tapcheck[256]={0};
+            sprintf(cmd_tapcheck,"input tap %d %d",trz_proto->x+(trz_proto->width>>1),trz_proto->y+(trz_proto->height>>1));
+            subproc_execmd(NULL,cmd_tapcheck);
+            Sleep(1400);
+        }
+
+        pTRZ trz_afm=gettrzbycode(trz,DOU_FORTUNEGIFT_DRAW_JACKPOT_CFMAWARD);
+        if(!trz_afm) return -1;
+        char cmd_afmaward[256]={0};
+        sprintf(cmd_afmaward,"input tap %d %d",trz_afm->x+(trz_afm->width>>1),trz_afm->y+(trz_afm->height>>1));
+        subproc_execmd(NULL,cmd_afmaward);
+        Sleep(1400);
+    } break;
+    case FORTUNEGIFT_AFMAWARD: {
+        pTRZ trz_awardafm=gettrzbycode(trz,DOU_FORTUNEGIFT_AWARDFORTUNEGIFT_AFMBTN);
+        if(!trz_awardafm) return -1;
+
+        char cmd_awardafm[256]={0};
+        sprintf(cmd_awardafm,"input tap %d %d",trz_awardafm->x+(trz_awardafm->width>>1),trz_awardafm->y+(trz_awardafm->height));
+        subproc_execmd(NULL,cmd_awardafm);
+        Sleep(1400);
+
+        //切换回新的直播间...
+        return -1;
+    } break;
     default: {} break;
     }
     return 0;
@@ -1347,3 +1578,4 @@ void PageAnalysis_Test() {
     if(api) delete api;
     
 }
+
