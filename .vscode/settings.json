@@ -21,7 +21,10 @@
         "span": "cpp",
         "utility": "cpp",
         "xstring": "cpp",
-        "xutility": "cpp"
+        "xutility": "cpp",
+        "filesystem": "cpp",
+        "forward_list": "cpp",
+        "xlocinfo": "cpp"
     },
     "makefile.configureOnOpen": false
 }

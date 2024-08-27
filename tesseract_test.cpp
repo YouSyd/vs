@@ -1109,9 +1109,10 @@ PAGECODE GetPageCode(tesseract::TessBaseAPI* api,const char* source_img,pTRZ lis
         }
         
         cv::Mat img=cv::imread(source_img);
+        if(img.data==NULL) return UNKNOWN_PAGE;
+
         cv::Mat source(img,cv::Rect(trz->x,trz->y,trz->width,trz->height));
         cv::Mat templt=cv::imread(template_img);
-            
         if(source.empty()||templt.empty()) {
             printf("加载图片[%s]或者模板图片[%s]失败\n",source_img,template_img);
             if(wfpj->workflow) SendMessage(wfpj->workflow,MSG_NODELIGHTING,(WPARAM)UNKNOWN_PAGE,(LPARAM)0);
@@ -1221,6 +1222,33 @@ BOOL IsThreadSuspended(HANDLE threadHandle) {
     return FALSE; // 线程未被挂起
 }
 
+/*
+ * output_buffer format.
+ * ---------------------------------------------------------
+ * PS E:\SRC_REF\tesseract\self-bulid\test\vs> adb devices
+ * List of devices attached
+ * 192.168.5.5:5555        device
+ * 192.168.5.3:5555        device
+ * 
+ */
+void subproc_analysishost(int exitcode,void* pEP,void* param) {
+    pExecPipes pep=(pExecPipes)pEP;
+    if(!pep) return;
+    char* host_plt=(char*)param;
+    int host_length=0;
+    for(int idx=0;idx<pep->output_len;idx++) {
+        if(pep->output_buffer[idx]=='\n') {
+            char host[256]={0};
+            int ip1,ip2,ip3,ip4,port;
+            if(5==sscanf(&pep->output_buffer[idx+1],"%d.%d.%d.%d:%d",&ip1,&ip2,&ip3,&ip4,&port)) {
+                sprintf(host,"%d.%d.%d.%d:%d",ip1,ip2,ip3,ip4,port);
+                strcat(host_plt+host_length,host);
+                host_length+=strlen(host)+1;
+            }
+        }
+    }
+}
+
 void Flows() {
     GMajor=(pMajor)calloc(sizeof(Major),1);
     if(GMajor==NULL) return;
@@ -1239,16 +1267,43 @@ void Flows() {
     GMajor->trz=trz;
     tesseract::TessBaseAPI* api=new tesseract::TessBaseAPI();
 
+    //初始化host
+    pwfpj_param wfpj=(pwfpj_param)f->extra;
+    char host_list[1024]={0};
+    char cmd_buffer[256]="adb devices";
+    if(0!=subproc_execmd((char*)"cmd",(char*)cmd_buffer,subproc_analysishost,host_list)) {
+        printf("获取host失败.\n");
+        MessageBox(wfpj->frame,"获取host失败.","异常",MB_OK|MB_ICONINFORMATION);
+        goto FLOWS_EXIT;
+    } else {
+        HMODULE module_host=LoadLibrary("host.dll");
+        if(module_host) {
+            SHOWDIALOGPROC cfmhost=(SHOWDIALOGPROC)GetProcAddress(module_host,"ConfirmHost");
+            if(cfmhost) {
+                cfmhost((HINSTANCE)module_host,wfpj->frame,(LPARAM)host_list);
+                memcpy(GMajor->host,&host_list[256],sizeof(GMajor->host));
+            } else {
+                MessageBox(wfpj->frame,"fuck, proc addr not found.","异常",MB_OK|MB_ICONINFORMATION);
+            }
+            FreeLibrary(module_host);
+        } else {
+            MessageBox(wfpj->frame,"加载host配置失败","异常",MB_OK|MB_ICONINFORMATION);
+        }
+    }
+
     //根据页面类型确定执行页面切换的策略
     int refresh_flag=1;
+    PAGECODE prepage=UNKNOWN_PAGE;
+    int close_repeat=0;
     while(refresh_flag) {
         //1. 捕捉图像
         int retry_count=0;
         while(retry_count<=5) {
             char img_fullpath[256]={0};
             sprintf(img_fullpath,"%s%s",path,"pics\\x.png");
+            //对于指定host，参数 adb -s $host ....
             char cmd3[256]={0};
-            sprintf(cmd3,"adb exec-out screencap -p > %s",img_fullpath);
+            sprintf(cmd3,"adb -s %s exec-out screencap -p > %s",GMajor->host,img_fullpath);
             if(0!=subproc_execmd((char*)"cmd",(char*)cmd3)) {retry_count++;printf("Command Execution failed.\n");Sleep(1000);}
             else break;
                 
@@ -1265,9 +1320,16 @@ void Flows() {
              */
             break;
         }
-    }
-    
 
+        if(page==prepage&&page==UNKNOWN_PAGE) {
+            close_repeat++;
+            Sleep(15*1000);
+        }
+        if(close_repeat>=3) break;
+        prepage=page;
+    }
+
+FLOWS_EXIT:
     ReleaseSections(trz);
     if(api) delete api; 
     if(GMajor) free(GMajor);
@@ -1283,6 +1345,8 @@ PAGECODE PageAnalysis(tesseract::TessBaseAPI* api,pTRZ trz) {
         "pics\\x.png"
     };
 
+    //检测图像是否有效
+
     char path[256]={0};
     GetModulePath(path);
     for(int idx=0;idx<sizeof(img_file)/sizeof(char[256]);idx++) {
@@ -1290,15 +1354,6 @@ PAGECODE PageAnalysis(tesseract::TessBaseAPI* api,pTRZ trz) {
         sprintf(tmp,"%s%s",path,img_file[idx]);
         strcpy(img_file[idx],tmp);
     }
-    //MessageBox(NULL,"PageAnalysis","",MB_OK);
-
-    // char path[256]={0};
-    // GetModulePath(path);
-    // for(int idx=0;idx<sizeof(img_file)/sizeof(char[256]);idx++) {
-    //     char tmp[256]={0};
-    //     sprintf(tmp,"%s%s",path,path,img_file[idx]);
-    //     strcpy(img_file[idx],tmp);
-    // }
 
     int idx=0;
     PAGECODE page=GetPageCode(api,img_file[idx],trz);
@@ -1333,6 +1388,11 @@ PAGECODE PageAnalysis(tesseract::TessBaseAPI* api,pTRZ trz) {
         //...
     break;
     default: 
+        /*
+         * 对于未知页面，其分析与处置尚未被支持，自动化流程无以为继
+         * 故一旦遇到位置页面，将进行3次 15S的等待尝试
+         * 如仍无法识别，流程不得不终止
+         */
         printf("Unknown PAGE,image file [%s]\n",img_file[idx]);
         /*
          * 将图像写入 pics/unknown/
@@ -1372,6 +1432,8 @@ int GetModulePath(char* path) {
  * NextPageStrategies_TRACEONE 实现的是对一个特定直播间的蹲守策略
  * 蹲守规则如下：
  * 如果该直播间尚在直播，持续检查福袋，直至中奖或者直播间关闭。
+ * 
+ * 你可以实现自己的页面切换策略
  */
 int NextPageStrategies_TRACEONE(pTRZ trz,PAGECODE currpage) {
     /*
@@ -1430,7 +1492,7 @@ int NextPageStrategies_TRACEONE(pTRZ trz,PAGECODE currpage) {
         int retry_count=0;
         while(retry_count<=5) {
             char cmd3[256]={0};
-            sprintf(cmd3,"adb exec-out screencap -p > %spics\\x.png",path);
+            sprintf(cmd3,"adb -s %s exec-out screencap -p > %spics\\x.png",GMajor->host,path);
             if(0!=subproc_execmd((char*)"cmd",(char*)cmd3)) {retry_count++;printf("Command Execution failed.\n");Sleep(1000);}
             else break;
                 
@@ -1520,6 +1582,11 @@ int NextPageStrategies_TRACEONE(pTRZ trz,PAGECODE currpage) {
         Sleep(1400);
 
         //切换回新的直播间...
+        return -1;
+    } break;
+    case STREAMER_ROOMCLOSED: {
+
+        //蹲守模式，如果直播间关闭，就退出了
         return -1;
     } break;
     default: {} break;
