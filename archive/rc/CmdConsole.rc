@@ -1,0 +1,10 @@
+#include <windows.h>
+
+0x0001  ICON "./res/fail_16.ico"
+0x0002  ICON "./res/success_16.ico"
+0x0003  ICON "./res/time_16.ico"
+0x0004  ICON "./res/fail.ico"
+0x0005  ICON "./res/success.ico"
+0x0006  ICON "./res/time.ico"
+0x0007  ICON "./res/clock.ico"
+0x0008  ICON "./res/command.ico"

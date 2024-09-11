@@ -1,0 +1,12 @@
+#include <windows.h>
+
+0x0001  ICON "./res/save.ico"
+0x0002  ICON "./res/cancel.ico"
+0x0003  ICON "./res/openfile.ico"
+0x0004  ICON "./res/expend.ico"
+0x0005  ICON "./res/collapse.ico"
+0x0006  ICON "./res/multimode.ico"
+0x0007  ICON "./res/launch.ico"
+0x0008  ICON "./res/suspend.ico"
+0x0009  ICON "./res/ocr.ico"
+

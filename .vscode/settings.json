@@ -24,7 +24,8 @@
         "xutility": "cpp",
         "filesystem": "cpp",
         "forward_list": "cpp",
-        "xlocinfo": "cpp"
+        "xlocinfo": "cpp",
+        "cstdlib": "cpp"
     },
     "makefile.configureOnOpen": false
 }
