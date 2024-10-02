@@ -108,7 +108,7 @@ TRZ sections[]={
         115,430,500,80,DOU_FORTUNEGIFT_DRAW_NOPRIZE_IMG,NULL,FORTUNEGIFT_NOPRIZE,
     },
     {
-        135,900,440,60,DOU_FORTUNEGIFT_DRAW_NOPRIZE_EXIT,NULL,FORTUNEGIFT_NOPRIZE,
+        135,815,440,60,DOU_FORTUNEGIFT_DRAW_NOPRIZE_EXIT,NULL,FORTUNEGIFT_NOPRIZE,
     },
     
     
@@ -127,6 +127,9 @@ TRZ sections[]={
     },
     {
         139,942,50,44,DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO,NULL,FORTUNEGIFT_JACKPOT,
+    },
+    {
+        139,942,50,44,DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO_CHECKED,NULL,FORTUNEGIFT_JACKPOT,
     },
     {
         338,1069,44,42,DOU_FORTUNEGIFT_DRAW_JACKPOT_CLOSEBTN,NULL,FORTUNEGIFT_JACKPOT,
@@ -169,7 +172,7 @@ int streamer_room_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
     char path[256]={0};
     GetModulePath(path);
     sprintf(fortunegift_clip_img,"%spics\\%d.png",path,(int)FORTUNEGIFT_OR_DIAMOND_RANGE);
-    ImgEnhanceBeforeOCR(fortunegift_clip_img,eh_img_name);
+    ImgEhanceBeforeOCR(fortunegift_clip_img,eh_img_name);
     
     int has_diamond=(searchtemplate(fortunegift_clip_img,DIAMOND_CLICKRECT,trz)==0?1:0);
     int has_fortunegift=(searchtemplate(fortunegift_clip_img,FORTUNEGIFT_CLICKRECT,trz)==0?1:0);
@@ -450,7 +453,7 @@ int fg_draw_jackpot_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
     char clip_file[256]={0};
     //对图像指定区域裁切保存
     Pix* pixSource=pixRead(img_file);
-    ClipTRZ(pixSource,trz,clip_file);
+    ClipTRZ(pixSource,trz_popup,clip_file);
     pixDestroy(&pixSource);
     
     pTRZ trz_affimbtn=gettrzbycode(trz,DOU_FORTUNEGIFT_DRAW_JACKPOT_CFMAWARD,0);
@@ -458,7 +461,7 @@ int fg_draw_jackpot_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
         printf("获取选区 DOU_FORTUNEGIFT_DRAW_JACKPOT_CFMAWARD 失败。\n");
         goto fg_draw_jackpot_ocr_exit;
     }
-    if(searchtemplate(clip_file,DOU_FORTUNEGIFT_DRAW_JACKPOT_CFMAWARD,trz_affimbtn)!=0) {
+    if(searchtemplate(clip_file,DOU_FORTUNEGIFT_DRAW_JACKPOT_CFMAWARD,trz)!=0) {
         printf("查找匹配的领奖确认按钮失败.\n");
         goto fg_draw_jackpot_ocr_exit;
     } else {
@@ -473,22 +476,41 @@ int fg_draw_jackpot_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
         printf("获取选区 DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO 失败。\n");
         goto fg_draw_jackpot_ocr_exit;
     }
+
+    /*
+     * 检查选区内有无圆圈 
+     */
+    if(searchtemplate(clip_file,DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO,trz)!=0) {
+        printf("获取 DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO 失败。\n");
+        goto fg_draw_jackpot_ocr_exit;
+    } else {
+        trz_proto->x+=trz_popup->x;trz_proto->y+=trz_popup->y;
+    }
+
     pTRZ trz_proto_checked=gettrzbycode(trz,DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO_CHECKED,0);
     if(!trz_proto_checked) {
         printf("获取选区 DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO_CHECKED 失败。\n");
         goto fg_draw_jackpot_ocr_exit;
     }
+    /*
+     * 将 trz_proto_checked的坐标更新为 trz_proto;
+     */
+    trz_proto_checked->x=trz_proto->x;trz_proto_checked->y=trz_proto->y;
+    trz_proto_checked->width=trz_proto->width;trz_proto_checked->height=trz_proto->height;
     
     /*
     * 未找到 同意协议（未选中）的checkbox
     * 判定为 同意协议（已选中）
     * 此处进一步识别确认
+    * 注意 这里调用 searchtemplate 确认协议是否点选的时候， update_trz 标志 必须置为0，即 不得更新已经刷新的 
+    *  DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO / DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO_CHECKED 
+    *  trz 坐标
     */   
     int isproto_checked=-1;
-    if(searchtemplate(clip_file,DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO,trz_proto)==0) {
+    if(searchtemplate(clip_file,DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO,trz,0)==0) {
         isproto_checked=0;
     } else {
-        if(searchtemplate(clip_file,DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO_CHECKED,trz_proto_checked)==0) {
+        if(searchtemplate(clip_file,DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO_CHECKED,trz,0)==0) {
             isproto_checked=1;
         }
     }
@@ -501,15 +523,15 @@ int fg_draw_jackpot_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
         /*
          * 更新 trz_proto、trz_proto_checked
          */
-        if(isproto_checked==0) {
-            trz_proto->x+=trz_popup->x;trz_proto->y+=trz_popup->y;
-            trz_proto_checked->x=trz_proto->x;trz_proto_checked->y=trz_proto->y;
-            trz_proto_checked->width=trz_proto->width;trz_proto_checked->height=trz_proto->height;
-        } else {
-            trz_proto_checked->x+=trz_popup->x;trz_proto_checked->y+=trz_popup->y;
-            trz_proto->x=trz_proto_checked->x;trz_proto->y=trz_proto_checked->y;
-            trz_proto->width=trz_proto_checked->width;trz_proto->height=trz_proto_checked->height;
-        }
+        // if(isproto_checked==0) {
+        //     trz_proto->x+=trz_popup->x;trz_proto->y+=trz_popup->y;
+        //     trz_proto_checked->x=trz_proto->x;trz_proto_checked->y=trz_proto->y;
+        //     trz_proto_checked->width=trz_proto->width;trz_proto_checked->height=trz_proto->height;
+        // } else {
+        //     trz_proto_checked->x+=trz_popup->x;trz_proto_checked->y+=trz_popup->y;
+        //     trz_proto->x=trz_proto_checked->x;trz_proto->y=trz_proto_checked->y;
+        //     trz_proto->width=trz_proto_checked->width;trz_proto->height=trz_proto_checked->height;
+        // }
     }
     ret=0;
 fg_draw_jackpot_ocr_exit:
@@ -524,7 +546,7 @@ int fg_draw_noprize_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
     return 0;
 }
 
-int ImgEnhanceBeforeOCR(const char* img_file,char* eh_img_file) {
+int ImgEhanceBeforeOCR(const char* img_file,char* eh_img_file) {
     cv::Mat image=cv::imread(img_file);
     if(image.empty()) {
         printf("无法打开图像[%s]。\n",img_file);
@@ -651,7 +673,7 @@ int TextTRZEh(tesseract::TessBaseAPI* api,const char* img_file,pTRZ trz) {
     // 对 eh_img_file 赋值
     // 增强图为原图名加上 "_Eh"
     getehimagename(clip_file,eh_img_file);
-    ImgEnhanceBeforeOCR(clip_file,eh_img_file);
+    ImgEhanceBeforeOCR(clip_file,eh_img_file);
     
     //3.识图
     Pix* pix=pixRead(eh_img_file);
@@ -856,11 +878,18 @@ int getehimagename(const char* img_name,char* eh_name) {
 }
 
 int searchtemplate(const char* source_img,TRZCODE code,pTRZ list) {
+    return searchtemplate(source_img,code,list,1);
+}
+
+/*
+ * update_trz ： 默认值为 1 - 更新匹配的trz
+ */
+int searchtemplate(const char* source_img,TRZCODE code,pTRZ list,int update_trz) {
     char template_imgs[][256]={
         "pics\\diamond_template.png",
         "pics\\gift_template.png",
         "pics\\fortunegift_award_template.png",
-        "pics\\fortunegift_protunchecked_template.png",
+        "pics\\fortunegift_protunchecked_template.png", //协议未点选
         "pics\\fortunegift_protchecked_template.png"
     };
 
@@ -936,7 +965,7 @@ int searchtemplate(const char* source_img,TRZCODE code,pTRZ list) {
         height=templt.rows;
         
         pTRZ trz=gettrzbycode(list,code,0);
-        if(trz) {
+        if(trz&&update_trz==1) {
             trz->x=x;trz->y=y;trz->width=width;trz->height=height;
         }
         //printf("找到匹配位置:(%d,%d) %d×%d\n",x,y,width,height);
