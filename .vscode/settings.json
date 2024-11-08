@@ -25,7 +25,8 @@
         "filesystem": "cpp",
         "forward_list": "cpp",
         "xlocinfo": "cpp",
-        "cstdlib": "cpp"
+        "cstdlib": "cpp",
+        "chrono": "cpp"
     },
     "makefile.configureOnOpen": false
 }

@@ -3,7 +3,7 @@
 #include "workflow_ctrl.h"
 #include "img_scratch.h"
 
-char datapath[]="E:\\SRC_REF\\tesseract\\self-bulid\\test\\tessdata";
+char datapath[256]="E:\\SRC_REF\\tesseract\\self-bulid\\test\\tessdata";
 
 #define STRINGIFY(x) #x
 #define TOSTRING(x) STRINGIFY(x)
@@ -82,6 +82,9 @@ TRZ sections[]={
     {
         260,865,670-260,1020-865,DOU_FORTUNEGIFT_DETAIL_TEXT,NULL,FORTUNEGIFT_DETAIL,
     },
+    {
+        31,1117,657,194,DOU_FORTUNEGIFT_TASKRECT,NULL,FORTUNEGIFT_DETAIL,
+    },
     //福袋详情页面-任务描述 1
     {
         50,1205,670-50,1245-1205,DOU_FORTUNEGIFT_DETAIL_TASK1,NULL,FORTUNEGIFT_DETAIL,
@@ -152,7 +155,14 @@ TRZ sections[]={
     {
         452,1410,237,83,DOU_FORTUNEGIFT_AWARDFORTUNEGIFT_AFMBTN,NULL,FORTUNEGIFT_AFMAWARD,
     },
+    //----------------------------------------------------
+    // fixed new trz sections.
+    {
+        996,145,35,35,STREAMERROOM_QUIT,NULL,STREAMER_ROOM,
+    },
 };
+
+const int sections_counts=sizeof(sections)/sizeof(TRZ);
 
 pMajor GMajor;
     
@@ -257,11 +267,29 @@ int fg_detail_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
     }
     /*
      * 此处有猫腻
+     * --------------------------------------
+     * 如何编写通用的倒计时识别？
+     * 
+     * come on
+     * 最好能识别出弹框
+     * 继而识别出弹框中的三个大矩形
+     * 1、福袋物品框
+     * 2、任务框
+     * 3、点击按钮
+     * 
+     * --------------------------------------
+     * 任务框中的内容很重要，两个未“达成”的任务
+     * 
+     * 
+     * 
+     * 
+     * 
+     * 
      */
-    trz_cd1->y+=48;trz_cd2->y+=48;
+    //trz_cd1->y+=48;trz_cd2->y+=48;
     TextTRZ(api,img,trz_cd1);
     TextTRZ(api,img,trz_cd2);
-    trz_cd1->y-=48;trz_cd2->y-=48;
+    //trz_cd1->y-=48;trz_cd2->y-=48;
     printf("倒计时[%s:%s]\n",trz_cd1->pText,trz_cd2->pText);
     
     int minutes=0,seconds=0;
@@ -282,9 +310,9 @@ int fg_detail_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
         printf("福袋详情-识别福袋详情页面出错：未能取到福袋内容文本\n");
         goto fg_detail_ocr_exit;
     }
-    trz_fdt->y+=48;
+    //trz_fdt->y+=48;
     TextTRZ(api,img,trz_fdt);
-    trz_fdt->y-=48;
+    //trz_fdt->y-=48;
     printf("福袋内容[%s]\n",trz_fdt->pText);
     GMajor->fg_desc=trz_fdt->pText;
     
@@ -300,20 +328,34 @@ int fg_detail_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
      * 在本机 720 × 1600 ， 两部任务比一步任务 y 小 48
      *
      */
+
+    /*
+     * 上述方案无法通用，简单依靠像素差可能存在问题。
+     * 现在计划将方案升级 
+     */
     
     
-    pTRZ trz_tk1=gettrzbycode(trz,DOU_FORTUNEGIFT_DETAIL_TASK1);
-    if(!trz_tk1) {
-        printf("福袋详情-识别福袋详情页面出错：未能取到任务1区域\n");
+    // pTRZ trz_tk1=gettrzbycode(trz,DOU_FORTUNEGIFT_DETAIL_TASK1);
+    // if(!trz_tk1) {
+    //     printf("福袋详情-识别福袋详情页面出错：未能取到任务1区域\n");
+    //     goto fg_detail_ocr_exit;
+    // }
+    pTRZ trz_tk=gettrzbycode(trz,DOU_FORTUNEGIFT_TASKRECT);
+    if(!trz_tk) {
+        printf("福袋详情-识别福袋详情页面出错：未能取到任务描述区域\n");
         goto fg_detail_ocr_exit;
     }
-    trz_tk1->y+=48;
+    //trz_tk1->y+=48;
     //TextTRZ(api,img,trz_tk1);
-    TextTRZEh(api,img_file,trz_tk1);//使用处理后的图片提高识别准确率
-    trz_tk1->y-=48;
-    if(trz_tk1->pText) printf("任务1[%s]\n",trz_tk1->pText);
-    GMajor->taskstatus[0]=((strstr(trz_tk1->pText,"已达成"))?1:0);    
-    
+    TextTRZEh(api,img_file,trz_tk);//使用处理后的图片提高识别准确率
+    //trz_tk1->y-=48;
+    if(trz_tk->pText) {
+        printf("任务1[%s]\n",trz_tk->pText);
+        GMajor->taskstatus[0]=((strstr(trz_tk->pText,"已达成"))?1:0);    
+    } else {
+        GMajor->taskstatus[0]=0;
+    }
+
     //检查执行任务文本
     pTRZ trz_et=gettrzbycode(trz,DOU_FORTUNEGIFT_DETAIL_EXECTASK);
     if(!trz_et) {
@@ -384,24 +426,44 @@ int fg_detail_2task_ocr(tesseract::TessBaseAPI* api,pTRZ trz,char* img_file) {
      */
     
     
-    pTRZ trz_tk1=gettrzbycode(trz,DOU_FORTUNEGIFT_DETAIL_TASK1);
-    if(!trz_tk1) {
-        printf("福袋详情-识别福袋详情页面出错：未能取到任务1区域\n");
+    // pTRZ trz_tk1=gettrzbycode(trz,DOU_FORTUNEGIFT_DETAIL_TASK1);
+    // if(!trz_tk1) {
+    //     printf("福袋详情-识别福袋详情页面出错：未能取到任务1区域\n");
+    //     goto fg_detail_2task_ocr_exit;
+    // }
+    // pTRZ trz_tk2=gettrzbycode(trz,DOU_FORTUNEGIFT_DETAIL_TASK2);
+    // if(!trz_tk2) {
+    //     printf("福袋详情-识别福袋详情页面出错：未能取到任务2区域\n");
+    //     goto fg_detail_2task_ocr_exit;
+    // }
+    // //TextTRZ(api,img,trz_tk1);
+    // TextTRZEh(api,img_file,trz_tk1);//使用处理后的图片提高识别准确率
+    // if(trz_tk1->pText) printf("任务1[%s]\n",trz_tk1->pText);
+    // //TextTRZ(api,img,trz_tk2);
+    // TextTRZEh(api,img_file,trz_tk2);//使用处理后的图片提高识别准确率
+    // if(trz_tk2->pText) printf("任务2[%s]\n",trz_tk2->pText);
+    // GMajor->taskstatus[0]=((strstr(trz_tk1->pText,"已达成"))?1:0);    
+    // GMajor->taskstatus[1]=((strstr(trz_tk2->pText,"已达成"))?1:0);
+    pTRZ trz_tk=gettrzbycode(trz,DOU_FORTUNEGIFT_TASKRECT);
+    if(!trz_tk) {
+        printf("福袋详情-识别福袋详情页面出错：未能取到任务描述区域\n");
         goto fg_detail_2task_ocr_exit;
     }
-    pTRZ trz_tk2=gettrzbycode(trz,DOU_FORTUNEGIFT_DETAIL_TASK2);
-    if(!trz_tk2) {
-        printf("福袋详情-识别福袋详情页面出错：未能取到任务2区域\n");
-        goto fg_detail_2task_ocr_exit;
+    if(!trz_tk->pText) {
+        GMajor->taskstatus[0]=GMajor->taskstatus[1]=0;
+    } else {
+        char* plt=strstr(trz_tk->pText,"达成");
+        char* plt2=strstr(plt+4,"达成");
+        if(plt&&plt2) {
+            plt=plt-2;
+            plt2=plt2-2;
+            GMajor->taskstatus[0]=((strstr(plt,"已达成")==plt)?1:0);
+            GMajor->taskstatus[1]=((strstr(plt2,"已达成")==plt2)?1:0);
+        } else {
+            printf("福袋详情-识别福袋详情页面出错：未能取到任务描述区域关于任务状态的描述\n");
+            goto fg_detail_2task_ocr_exit;
+        }
     }
-    //TextTRZ(api,img,trz_tk1);
-    TextTRZEh(api,img_file,trz_tk1);//使用处理后的图片提高识别准确率
-    if(trz_tk1->pText) printf("任务1[%s]\n",trz_tk1->pText);
-    //TextTRZ(api,img,trz_tk2);
-    TextTRZEh(api,img_file,trz_tk2);//使用处理后的图片提高识别准确率
-    if(trz_tk2->pText) printf("任务2[%s]\n",trz_tk2->pText);
-    GMajor->taskstatus[0]=((strstr(trz_tk1->pText,"已达成"))?1:0);    
-    GMajor->taskstatus[1]=((strstr(trz_tk2->pText,"已达成"))?1:0);
     
     //检查执行任务文本
     pTRZ trz_et=gettrzbycode(trz,DOU_FORTUNEGIFT_DETAIL_EXECTASK);
@@ -890,7 +952,8 @@ int searchtemplate(const char* source_img,TRZCODE code,pTRZ list,int update_trz)
         "pics\\gift_template.png",
         "pics\\fortunegift_award_template.png",
         "pics\\fortunegift_protunchecked_template.png", //协议未点选
-        "pics\\fortunegift_protchecked_template.png"
+        "pics\\fortunegift_protchecked_template.png",
+        "pics\\fortunegift_detail_template.png",
     };
 
     char path[256]={0};
@@ -918,6 +981,9 @@ int searchtemplate(const char* source_img,TRZCODE code,pTRZ list,int update_trz)
         break;
     case DOU_FORTUNEGIFT_DRAW_JACKPOT_AFMPROTO_CHECKED:
         template_img=&template_imgs[4][0];
+        break;
+    case DOU_FORTUNEGIFT_DETAIL_IMG:
+        template_img=&template_imgs[5][0];
         break;
     }
     
@@ -963,7 +1029,7 @@ int searchtemplate(const char* source_img,TRZCODE code,pTRZ list,int update_trz)
         y=matchLoc.y;
         width=templt.cols;
         height=templt.rows;
-        
+
         pTRZ trz=gettrzbycode(list,code,0);
         if(trz&&update_trz==1) {
             trz->x=x;trz->y=y;trz->width=width;trz->height=height;
@@ -1173,16 +1239,45 @@ PAGECODE GetPageCode(tesseract::TessBaseAPI* api,const char* source_img,pTRZ lis
         if(maxVal>threshold) {
             PAGECODE code=pages[idx];
             if(FORTUNEGIFT_DETAIL==pages[idx]) {
-                //trz->x=matchLoc.x;trz->y=matchLoc.y;
-                int y_offset=trz->y+matchLoc.y;
-                if(y_offset>=700&&y_offset<=740) {
-                    //两部任务模式 718
-                    printf("两步任务模式,template Y:%d\n",y_offset);
+                // //trz->x=matchLoc.x;trz->y=matchLoc.y;
+                // int y_offset=trz->y+matchLoc.y;
+                // if(y_offset>=700&&y_offset<=740) {
+                //     //两部任务模式 718
+                //     printf("两步任务模式,template Y:%d\n",y_offset);
                     
-                    code=FORTUNEGIFT_DETAIL_2TASK;
-                } else {
-                    //一步任务模式 766, offset = 766-718=48;
-                    printf("一步任务模式,template Y:%d\n",y_offset);
+                //     code=FORTUNEGIFT_DETAIL_2TASK;
+                // } else {
+                //     //一步任务模式 766, offset = 766-718=48;
+                //     printf("一步任务模式,template Y:%d\n",y_offset);
+                // }
+                /*
+                * 尝试用某种方式识别是一步还是两步
+                */
+                pTRZ trz_taskzone=gettrzbycode(list,DOU_FORTUNEGIFT_TASKRECT);
+                if(trz_taskzone) {
+                    //Pix* pixImg=pixRead(source_img); 
+                    if(!api) {
+                        tesseract::TessBaseAPI* api_new=new tesseract::TessBaseAPI();
+                        TextTRZEh(api_new,source_img,trz_taskzone);
+                        if(api_new) delete api_new;
+                    } else {
+                        TextTRZEh(api,source_img,trz_taskzone);
+                    }
+                    //pixDestroy(&pixImg);
+
+                    if(trz_taskzone->pText) {
+#define CHK_TASK_KEYWORDS   "达成"                    
+                        char* task_plt=strstr(trz_taskzone->pText,CHK_TASK_KEYWORDS);
+                        if(!task_plt) {
+                            code=UNKNOWN_PAGE;
+                        } else {
+                            task_plt+=strlen(CHK_TASK_KEYWORDS);
+                            if(strstr(task_plt,CHK_TASK_KEYWORDS)) {
+                                code=FORTUNEGIFT_DETAIL_2TASK;
+                            }
+                        }
+
+                    }
                 }
             }
             
@@ -1279,8 +1374,11 @@ void subproc_analysishost(int exitcode,void* pEP,void* param) {
 }
 
 void Flows() {
-    GMajor=(pMajor)calloc(sizeof(Major),1);
     if(GMajor==NULL) return;
+    resetmajor(GMajor);
+
+    time_t tstart;
+    time(&tstart);
 
     char path[256]={0};
     GetModuleFileName(NULL,path,sizeof(path));
@@ -1289,11 +1387,6 @@ void Flows() {
         *(plt+1)='\0';
     }
     
-    //参数初始化
-    int sections_size=sizeof(sections)/sizeof(TRZ);
-    pTRZ trz=new TRZ[sections_size];
-    memcpy(trz,sections,sizeof(sections));
-    GMajor->trz=trz;
     tesseract::TessBaseAPI* api=new tesseract::TessBaseAPI();
 
     //初始化host
@@ -1340,10 +1433,35 @@ void Flows() {
         }
         
         //2.分析图像界面，识别页面，并解析页面内容
-        PAGECODE page=PageAnalysis(api,trz);
+        PAGECODE page=PageAnalysis(api,GMajor->trz);
+
+        /*
+         * 如果当前页面为 直播间主界面，且执行策略为 2-持续执行2小时后关机
+         * 判断是否超过两小时,如果超过
+         * 1.关闭直播间
+         * 2.关闭电脑
+         */
+        if(page==STREAMER_ROOM&&GMajor->strategycode==2) {
+            time_t tnow;
+            time(&tnow);
+            if(difftime(tnow,tstart)>=2*60*60) {
+                char cmdexit[256]={0};
+                pTRZ trz_ext=gettrzbycode(GMajor->trz,STREAMERROOM_QUIT);//很抱歉，目前没有设置直播间退出的选区，如果添加，会导致前面的方案设置失败
+                if(trz_ext) {
+                    sprintf(cmdexit,"adb -s %s input tap %d %d",trz_ext->x+trz_ext->x+(trz_ext->width>>1),trz_ext->y+trz_ext->y+(trz_ext->height>>1));
+                    subproc_execmd(NULL,cmdexit);
+                    Sleep(5000);
+                }
+
+                char cmdshutdown[256]={0};
+                sprintf(cmdshutdown,"shutdown /s /f /t 0");
+                subproc_execmd(NULL,cmdshutdown);
+                break;
+            }
+        }
 
         //3. 确定下一个页面
-        if(0!=NextPageStrategies_TRACEONE(trz,page)) {
+        if(0!=NextPageStrategies_TRACEONE(GMajor->trz,page)) {
             /*
              * 页面跳转出现了异常
              */
@@ -1359,12 +1477,9 @@ void Flows() {
     }
 
 FLOWS_EXIT:
-    ReleaseSections(trz);
     if(api) delete api; 
-    if(GMajor) {
-        free(GMajor);
-        GMajor=NULL;
-    }
+    //clearmajor(GMajor);
+    //GMajor=NULL;
 }
 
 /*
@@ -1406,10 +1521,12 @@ PAGECODE PageAnalysis(tesseract::TessBaseAPI* api,pTRZ trz) {
         }
     break;
     case FORTUNEGIFT_DETAIL: 
+        fg_detail_ocr_prepare_dynamic(trz,img_file[idx]);
         GMajor->taskcount=1;
         fg_detail_ocr(api,trz,img_file[idx]);
     break;
     case FORTUNEGIFT_DETAIL_2TASK: 
+        fg_detail_ocr_prepare_dynamic(trz,img_file[idx]);
         GMajor->taskcount=2;
         fg_detail_2task_ocr(api,trz,img_file[idx]);
     break;
@@ -1686,3 +1803,707 @@ void PageAnalysis_Test() {
     
 }
 
+int opencv_recognize_rectangles(char* filename,void* prc_list,int* prc_count) {
+    cv::Mat img=cv::imread(filename);
+    if(img.empty()) {
+        printf("打开文件%s失败！",filename);
+        return -1;
+    }
+
+    cv::Mat gray;
+    cv::cvtColor(img,gray,cv::COLOR_BGR2GRAY);
+
+    //使用Canny 进行边缘检测,通常灰度范围50~150
+    //对于低对比度的图像
+    //阈值下限在10~30，上限在30~70
+    cv::Mat edges;
+    cv::Canny(gray,edges,20,60);
+
+    //寻找轮廓
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(edges,contours,cv::RETR_TREE,cv::CHAIN_APPROX_NONE);
+
+    *prc_count=0;
+    //筛选合适的矩形
+    for(size_t i=0;i<contours.size();i++) {
+        if(contours[i].size()>100) {
+            cv::RotatedRect rect=cv::minAreaRect(contours[i]);
+
+            cv::Point2f vertices[4];
+            rect.points(vertices);
+
+            float rcWidth=rect.size.width;
+            float rcAngle=rect.angle;
+            if(rcAngle<-45.0f) rcAngle+=90;
+
+            if(!(abs(rcAngle)<1.0f||abs(rcAngle-90)<1.0f)||rcWidth<30.0f) continue;
+
+            int pos[4]={
+                (int)vertices[0].x,(int)vertices[0].y,
+                //(int)vertices[1].x,(int)vertices[1].y,
+                (int)vertices[2].x,(int)vertices[2].y,
+                //(int)vertices[3].x,(int)vertices[3].y
+            };
+
+            //验证并传输gdi合法的矩形
+            if(pos[0]>pos[2]) {
+                int tmp=pos[0];
+                pos[0]=pos[2];
+                pos[2]=tmp;
+            }
+            if(pos[1]>pos[3]) {
+                int tmp=pos[1];
+                pos[1]=pos[3];
+                pos[3]=tmp;
+            }
+
+            assert(*prc_count<1000*4);
+            memcpy(((int*)prc_list)+(*prc_count),pos,sizeof(pos));
+
+            (*prc_count)+=4;
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * opencv_recognize_circles
+ * 参数
+ * pcl_list：圆的列表，int[], int[0]-圆心x,int[1]-圆心y,int[2]-半径R
+ * pcl_count: 圆的数量
+ * range1<=R<=range2：识别圆的半径范围
+ */
+int opencv_recognize_circles(char* filename,int range1,int range2,void* pcl_list,int* pcl_count) {
+    cv::Mat src = cv::imread(filename);
+    if (src.empty()) {
+        printf("打开图像[%s]失败!\n",filename);
+        return -1;
+    }
+
+    // 转换为灰度图像
+    cv::Mat gray;
+    cv::cvtColor(src, gray, cv::COLOR_BGR2GRAY);
+
+    // 对图像进行平滑处理以减少噪声
+    cv::GaussianBlur(gray, gray, cv::Size(9, 9), 2, 2);
+
+    // 存储检测到的圆
+    std::vector<cv::Vec3f> circles;
+    
+    //设置检索圆圈的半径大小
+    int min_radius=range1;
+    int max_radius=range2;
+    // 使用霍夫变换检测圆圈
+    //cv::HoughCircles(gray, circles, 
+    //                 cv::HOUGH_GRADIENT, 
+    //                 1, 
+    //                 gray.rows/16, 
+    //                 100, //Canny边缘检测的最高阈值，更高的阈值导致更少的边缘像素被检测，适合高对比度的边缘图像，通常设置在100-200
+    //                 30,  //霍夫变换累加器，即检测出一个圆所需要的最小累加器值，需要不低于此值的圆边缘的检测才会被认定为一个圆。
+    //                 min_radius,max_radius);
+    
+    cv::HoughCircles(gray, circles, cv::HOUGH_GRADIENT, 1, gray.rows/16,100,130,min_radius,max_radius);
+
+    // 在原图上绘制检测到的圆圈
+    for (size_t i = 0; i < circles.size(); i++) {
+        cv::Vec3i c = circles[i];
+        memcpy((int*)pcl_list+i*3,&c[0],sizeof(int)*3);
+
+        //pcl_list[3*i]=c[0];
+        //pcl_list[3*i+1]=c[1];
+        //pcl_list[3*i+1]=c[2];
+    }
+    *pcl_count=circles.size();
+
+    return 0;
+}
+
+int opencv_recognize_circles(char* filename,void* pcl_list,int* pcl_count) {
+    int default_range1=70;
+    int default_range2=120;
+    return opencv_recognize_circles(filename,default_range1,default_range2,pcl_list,pcl_count);
+}
+
+int opencv_savetemplateclips(char* filename,int x,int y,int cx,int cy,char* template_file) {
+    cv::Mat img=cv::imread(filename);
+    if(img.empty()) {
+        printf("打开图片%s失败!\n",filename);
+        return -1;
+    }
+
+    cv::Rect clipRect(x,y,cx,cy);
+    cv::Mat clip=img(clipRect);
+    cv::imwrite(template_file,clip);
+
+    return 0;
+}
+
+int opencv_savetemplateclips(char* filename,int x,int y,int cx,int cy,PAGECODE page) {
+    char template_imgs[][256]={
+        "pics\\fortunegift_draw_jackpot_template.png",//中奖模板图
+        "pics\\fortunegift_draw_noprize_template.png",//未中奖模板图
+        "pics\\streamer_room_template.png",
+        "pics\\fortunegift_detail_template.png",
+        "pics\\diamond_detail_template.png",
+        "pics\\fortunegift_afmaward_template.png",
+    };
+
+    PAGECODE pages[]={
+        FORTUNEGIFT_JACKPOT,
+        FORTUNEGIFT_NOPRIZE,
+        STREAMER_ROOM,
+        FORTUNEGIFT_DETAIL,
+        DIAMOND_DETAIL,
+        FORTUNEGIFT_AFMAWARD,
+    };
+
+    char path[256]={0};
+    GetModulePath(path);
+    for(int idx=0;idx<sizeof(template_imgs)/sizeof(char[256]);idx++) {
+        char tmp[256]={0};
+        sprintf(tmp,"%s%s",path,template_imgs[idx]);
+        strcpy(template_imgs[idx],tmp);
+    }
+
+    for(int idx=0;idx<sizeof(pages)/sizeof(PAGECODE);idx++) {
+        if(page==pages[idx]) {
+            return opencv_savetemplateclips(filename,x,y,cx,cy,template_imgs[idx]);
+        }
+    }
+    
+    return -1;
+}
+
+pMajor initialmajor() {
+    pMajor major=(pMajor)calloc(sizeof(Major),1);
+    if(major==NULL) return NULL;
+    
+    //参数初始化
+    int sections_size=sizeof(sections)/sizeof(TRZ);
+    pTRZ trz=new TRZ[sections_size];
+    if(!trz) return NULL;
+    memcpy(trz,sections,sizeof(sections));
+    major->trz=trz;
+
+    major->trzproj_buffer=(char*)calloc(sizeof(char)*1024,1);
+    major->trzproj_list=(char**)calloc(sizeof(char*)*50,1);
+    if(!major->trzproj_buffer||!major->trzproj_list) {
+        clearmajor(major);
+        return NULL;
+    }
+
+    major->trzproj_list[0]=major->trzproj_buffer;
+    major->activeproj_index=-1;
+
+    return major;
+}
+
+void resetmajor(pMajor major) {
+    if(major) {
+        memset(major->host,0x00,sizeof(major->host));
+        major->hasfg=major->alivecount=major->timestamp=major->fg_countdown=0;
+        major->currpage=(PAGECODE)0;
+
+        major->taskcount=0;
+        major->taskstatus[0]=major->taskstatus[1]=major->taskstatus[2]=0;
+        major->proto_checked=0;
+    }
+}
+
+void clearmajor(pMajor major) {
+    if(major) {
+        if(major->trz) {
+
+            ReleaseSections(major->trz);
+
+            major->trz=NULL;
+        }
+
+        if(major->trzproj_buffer) {
+            free(major->trzproj_buffer);
+            major->trzproj_buffer=NULL;
+        }
+
+        if(major->trzproj_list) {
+            free(major->trzproj_list);
+            major->trzproj_list=NULL;
+        }
+        major->trzproj_count=0;
+
+        free(major);
+    }
+}
+
+// 撤销：原意为对.trz文件的修改，已在ScratchView中实现
+// int Major_AlterTRZProj(pMajor major,PAGECODE page,pTRZ list,int listcount) {
+//
+// }
+
+int Major_AddTRZProj(pMajor major,char* proj) {
+    return Major_AddTRZProj(major,proj,0);
+}
+
+/*
+ * Major_AddTRZProj
+ * 功能：添加新的运行方案
+ * 参数：
+ * writebackindexfile: 0----无需回写TRZPROJINDEXFILE
+ *                     !0---必须回写
+ */
+int Major_AddTRZProj(pMajor major,char* proj,int writebackindexfile) {
+    /*
+     * 在当前的Major中添加指定的proj
+     * 添加major 需要做一些必要的检查：文件是否存在，目录是否存在 
+     */
+    if(!major||!major->trzproj_list) return -1;
+
+    for(int idx=0;idx<major->trzproj_count;idx++) {
+        if(strcmp(proj,major->trzproj_list[idx])==0) {
+            /**
+             * 方案已经存在
+             */
+
+            return 0;
+        }
+    }
+    
+    /**
+     * 检查方案文件是否存在
+     */
+    char path[256]={0},projfolder[256]={0},projtrzfile[256]={0};
+    GetModulePath(path);
+    sprintf(projfolder,"%s%s\\",path,proj);
+    if(!PathIsDirectory(projfolder)) return -1;
+
+    sprintf(projtrzfile,"%s%s%s",projfolder,proj,TRZPROJ_EXTENSION);
+    DWORD attrib=GetFileAttributes(projtrzfile);
+    if(attrib==INVALID_FILE_ATTRIBUTES||(attrib&FILE_ATTRIBUTE_DIRECTORY)) return -1;
+
+    if(writebackindexfile!=0&&major->trzproj_count<=0) {
+        char idxfile[256]={0};
+        sprintf(idxfile,"%s%s",path,TRZPROJINDEXFILE);
+        FILE* file=fopen(idxfile,"a+");
+        if(!file) return -1;
+
+        /*
+         * 读取记录数 字符串 8个字节
+         * 如果文件不存在就需要创建，直接写
+         */
+        fprintf(file,"%-8s\n","1");
+        fwrite(proj,strlen(proj),1,file);
+
+        if(file) fclose(file);
+    }
+
+    /*
+     * 加入proj列表
+     */
+    strcpy(major->trzproj_list[major->trzproj_count],proj);
+    major->trzproj_count+=1;
+    assert(major->trzproj_count<20);
+    major->trzproj_list[major->trzproj_count]=major->trzproj_list[major->trzproj_count-1]+(1+strlen(major->trzproj_list[major->trzproj_count-1]));
+
+    if(writebackindexfile!=0&&major->trzproj_count>0) {
+        char idxfile[256]={0};
+        sprintf(idxfile,"%s%s",path,TRZPROJINDEXFILE);
+        FILE* file=fopen(idxfile,"a+");
+        if(!file) return -1;
+        fprintf(file,"%-8d\n",major->trzproj_count);
+
+        fseek(file, 0, SEEK_END);
+        fprintf(file,"\n%s",proj);
+
+        fclose(file);
+    }
+
+    return 0;
+}
+
+int Major_SetCurrProj(pMajor major,char* proj) {
+    if(!major||!major->trzproj_list||major->trzproj_count<=0) return -1;
+
+    for(int idx=0;idx<major->trzproj_count;idx++) 
+        if(0==strcmp(proj,major->trzproj_list[idx]))
+            return Major_SetCurrProj(major,idx);
+    return -1; 
+}
+
+/*
+ * 默认需要从TRZProjFile中加载方案
+ */
+int Major_SetCurrProj(pMajor major,int idx) {
+    return Major_SetCurrProj(major,idx,1);
+}
+
+/*
+ * 若当前没有方案，且TRZProjFile尚不存在时，仅从从内存中更新proj ，
+ * 则copyfromfile = 0
+ */
+int Major_SetCurrProj(pMajor major,int idx,int copyfromfile) {
+    /*
+     * 从文件中读出数据，并应用至 major->smps,major->trz 等
+     */
+    if(!major||idx>=major->trzproj_count||major->trzproj_list[idx]==NULL) return -1;
+
+    major->activeproj_index=idx;
+
+    if(copyfromfile!=1) return 0;
+
+    char path[256]={0},trzproj_fullname[256]={0};
+    GetModulePath(path);
+
+    sprintf(trzproj_fullname,"%s%s\\%s%s",path,major->trzproj_list[idx],major->trzproj_list[idx],TRZPROJ_EXTENSION);
+    FILE* file=fopen(trzproj_fullname,"rb");
+    if(!file) return -1;
+
+    TRZProjFile trzproj={0};
+    fread(&trzproj,sizeof(TRZProjFile),1,file);
+    fclose(file);
+
+    /*
+     * 此处存在一个隐患：
+     * trz::pText 是一个指针，是无法进行拷贝的
+     * 此处直接拷贝可能导致内存泄漏
+     * 伏笔日期：2024年10月17日
+     * -------------------------------------
+     * 已试图修复
+     */
+    if(major->trz&&trzproj.trzs_count>0) {
+        int trz_allocated=_msize(major->trz)/sizeof(TRZ);
+        for(int idx=0;idx<trz_allocated;idx++) {
+            if((major->trz+idx)->pText) {
+                free((major->trz+idx)->pText);
+                (major->trz+idx)->pText=NULL;
+            }
+        }
+
+        memcpy(major->trz,&trzproj.trz,trzproj.trzs_count*sizeof(TRZ));
+    }
+
+    HWND scratchview=((pwfpj_param)(f->extra))->imgsratch;
+    SendMessage(scratchview,MSG_SETSMPSIMGS,(WPARAM)major,(LPARAM)&trzproj);
+    return 0;
+}
+
+int Major_LoadProj(pMajor major,char* proj) {
+    if(!major) return -1;
+
+    if(!proj) {
+        /*
+         * 从索引文件中加载
+         */
+        char filepath[256]={0};
+        GetModulePath(filepath);
+        strcat(filepath,TRZPROJINDEXFILE);
+        FILE* file=fopen(filepath,"rb");
+        if(!file) return -1;
+
+        int projcount=0;
+        fscanf(file,"%d",&projcount);
+        assert(projcount<20);
+        for(int idx=0;idx<projcount;idx++) {
+            char projname[256]={0};
+            fscanf(file,"%s",projname);
+
+            if(0!=Major_AddTRZProj(major,projname)) {
+                fclose(file);
+                file=NULL;
+                return -1;
+            }
+        }
+        if(file) fclose(file);
+        file=NULL;
+
+        if(major->trzproj_count>0) {
+            Major_SetCurrProj(major,0);
+        }
+    } else {
+        /*
+         * 检查已加载的方案中是否存在指定的proj
+         */
+        for(int idx=0;idx<major->trzproj_count;idx++) {
+            if(strcmp(proj,major->trzproj_list[idx])==0) {
+                return Major_SetCurrProj(major,proj);
+            }
+        }
+
+        /*
+         * 指定方案尚未加载
+         */
+        if(0!=Major_AddTRZProj(major,proj)) return -1;
+        return Major_SetCurrProj(major,proj);
+    }
+}
+
+int Major_SaveProjs(pMajor major) {
+    if(!major) return -1;
+
+    if(major->trzproj_count<=0) {
+        /**
+         * 将当前的ProjFile 保存
+         */
+        HWND scratchview=((pwfpj_param)(f->extra))->imgsratch;
+        pScratchView psv=ScratchView_GetSettings(scratchview);
+        if(psv&&psv->smps_count>0) {
+            /*
+             * 为当前的 trz/smps 创建TRZProjFile
+             */
+            
+        }
+        //创建默认proj
+        major->trzproj_count=1;
+        sprintf(major->trzproj_list[0],"%s","DefaultProj_Joe");
+        major->trzproj_list[1]=major->trzproj_list[0]+(strlen(major->trzproj_list[0])+1);
+        major->activeproj_index=0;
+
+        SendMessage(scratchview,MSG_SAVEPROJ,(WPARAM)major,(LPARAM)major->trzproj_list[0]);
+    }
+
+    char path[256]={0};
+    GetModulePath(path);
+
+    char idxfile[256]={0};
+    sprintf(idxfile,"%s%s",path,TRZPROJINDEXFILE);
+    FILE* file=fopen(idxfile,"w");
+    if(!file) return -1;
+
+    fprintf(file,"%-8d",major->trzproj_count);
+    for(int idx=0;idx<major->trzproj_count;idx++) {
+        fprintf(file,"\n%s",major->trzproj_list[idx]);
+    }
+    fclose(file);
+
+    return 0;
+}
+
+/*
+ * 对于 福袋详情页面
+ * 计划采取如下分析思路
+ * 1、分析图形，过滤有效矩形
+ * 2、按照面积排序，试图找出页面的三个较大面积的矩形（福袋详情、任务列表、任务按钮）
+ *    理论上，最大的矩形属于福袋详情，位于 福袋详情标识图的下方
+ *    找到福袋详情之后，计算其宽度，以此为基准，筛选宽度类似的其它矩形
+ *    
+ * 3、分析关注的信息
+ *  3.1 找出页面识别标识的位置，从而定位倒计时的 top/bottom，并筛选出有效矩形
+ *      将此区间的矩形按照left坐标排序，从中读取数值
+ *  3.2 任务列表判断是一步任务还是两部任务...
+ * 
+ */
+/*
+ * 我在更新这段代码的时候，在网上看到一段视频
+ * 一个医学博士，享受国务院津贴，带课题组，37岁，患三期肺癌，他知道自己没治了，身体很痛苦，内心更加痛苦。
+ * 他说他知道自己的情况，他说以他所学和经历，医学根本没有奇迹，他曾跟随云游僧人两天，僧人劝他做有意义的事情，他的跟随只是浪费自己的生命。
+ * 他从医一直想做好人，接诊期间累计替病人垫付40余万，无一不是握着他的手说有钱一定还上，他说他累计收回无头账仅仅不到两万。
+ * 他在无多的时日里将房子卖掉，觉得钱款没有意义，遂转手将房款转给一个大学同学（女）完成理财指标，就在她几乎已经认为钱被卷走的时候，同学将钱打了回来，甚至还赚了不少...
+ * 他强调内心不甘心，他还没有出成果，对不起津贴，没有子嗣，对不起父母，努力奋斗，对不起自己。
+ * 他说他资助了一名山区学生，从9岁开始，现今已经大学毕业，正陪着他，他强调自己是个好人，怨念啊...
+ * --------------------------------------------------------------------------------------
+ * 命运弄人
+ */
+//面积由大到小
+int cmpSize2(const void* a,const void* b) {
+    int* pa=(int*)a;int* pb=(int*)b;
+    return (abs(pb[2]-pb[0])*abs(pb[3]-pb[1])-abs(pa[2]-pa[0])*abs(pa[3]-pa[1]));
+}
+//top由低到高 （小到大) return a-b
+int cmpPosTop(const void* a,const void* b) {
+    return *((int*)a+1)-*((int*)b+1);
+}
+//left由小到大 return a-b
+int cmpPosLeft(const void* a,const void* b) {
+    return *((int*)a)-*((int*)b);
+}
+/*
+ * fg_detail_ocr_prepare_dynamic
+ * ------------------------------------
+ * 该代码需要在福袋详情页面的内容分析前执行，用于确定详情页面的几个关键选区的位置
+ */
+int fg_detail_ocr_prepare_dynamic(pTRZ list,char* img) {
+    /**
+     * 更新并获取有效的DOU_FORTUNEGIFT_DETAIL_IMG区域坐标 
+     */
+    pTRZ trz_fdi=gettrzbycode(list,DOU_FORTUNEGIFT_DETAIL_IMG);
+    trz_fdi->x=0;trz_fdi->y=0;
+    if(0!=searchtemplate(img,DOU_FORTUNEGIFT_DETAIL_IMG,list)) return -1;
+
+    int rcCount=0;
+    int rcList[1000*4]={0};
+    if(0!=opencv_recognize_rectangles(img,&rcList,&rcCount)) return -1;
+
+    /*
+     * 按照面积进行排序
+     */
+    rcCount/=4;
+    qsort(rcList,rcCount,sizeof(int)*4,cmpSize2);
+    /*
+     * 检查rcList第一组是否位于trz_fdi 之下
+     */
+    if(rcList[1]<=trz_fdi->y+trz_fdi->height) {
+        printf("设想中的页面识别标识应该位于识别的最大矩形（假定为福袋详情)的上方，但现在似乎并非如此\n");
+        return -1;
+    }
+
+    /**
+     * 筛选宽度类似的矩形
+     * 并按照y/height 坐标排序
+     */
+    int width=rcList[2]-rcList[0];
+    cv::Mat image=cv::imread(img);
+    int imgwidth=image.cols;
+    /* 
+     * 1000 pixls ,偏差 30 pixls的冗余 即 0.015
+     */
+    float range_dense=0.050f;
+    int width_range[2]={
+        (width/(float)imgwidth-range_dense)*imgwidth,
+        (width/(float)imgwidth+range_dense)*imgwidth
+    };
+
+    int filtered[1000*4]={0};
+    int rcFiltered=0;
+    for(int idx=0;idx<rcCount;idx++) {
+        if(rcList[idx*4+2]-rcList[idx*4]>=width_range[0]&&
+           rcList[idx*4+2]-rcList[idx*4]<=width_range[1]&&
+           rcList[idx*4+1]>rcList[3]&&
+           rcList[idx*4+3]-rcList[idx*4+1]>0) {
+            /*
+             * 可用的矩形
+             */
+            memcpy(&filtered[rcFiltered*4],&rcList[idx*4],sizeof(int)*4);
+            rcFiltered++;
+        }
+    }
+    /**
+     * 这些矩形可能是嵌套交叉的，要排除掉嵌套交叉的
+     * 按照 top 坐标排序，从小到大，如果相邻的两个矩形存在包含或者大面积交叉
+     * 包含-选取较大的那一个 
+     * 大面积交叉-选取并集 ？
+     * 
+     */
+    qsort(filtered,rcFiltered,sizeof(int)*4,cmpPosTop);
+    
+    int filtered2[1000*4]={rcList[0],rcList[1],rcList[2],rcList[3]};
+    int rcFiltered2=1;
+    for(int idx=1;idx<rcFiltered;idx++) {
+        if(abs(filtered[idx*4+1]-filtered2[(rcFiltered2-1)*4+1])<=range_dense*imgwidth*2||
+           abs(filtered[idx*4+3]-filtered2[(rcFiltered2-1)*4+3])<=range_dense*imgwidth*2
+        ) {
+            //两者相交或包含,覆写
+            int x1[2]={
+                filtered[idx*4],filtered[idx*4+2]
+            },
+            y1[2]={
+                filtered[idx*4+1],filtered[idx*4+3]
+            },
+            x2[2]={
+                filtered2[(rcFiltered2-1)*4],filtered2[(rcFiltered2-1)*4+2]
+            },
+            y2[2]={
+                filtered2[(rcFiltered2-1)*4+1],filtered2[(rcFiltered2-1)*4+3]
+            };
+
+            filtered2[(rcFiltered2-1)*4]=x1[0]<x2[0]?x1[0]:x2[0];
+            filtered2[(rcFiltered2-1)*4+1]=y1[0]<y2[0]?y1[0]:y2[0];
+            filtered2[(rcFiltered2-1)*4+2]=x1[1]>x2[1]?x1[1]:x2[1];
+            filtered2[(rcFiltered2-1)*4+3]=y1[1]>y2[1]?y1[1]:y2[1];
+        } else {
+            rcFiltered2++;
+            memcpy(&filtered2[(rcFiltered2-1)*4],&filtered[idx*4],sizeof(int)*4);
+        }
+    }
+
+    if(rcFiltered2==3) {
+        /*
+         * 判断是一步任务还是两步任务
+         */
+        //回写 选区TRZ
+        pTRZ trz_tk=gettrzbycode(list,DOU_FORTUNEGIFT_TASKRECT);
+        if(!trz_tk) return -1;
+        trz_tk->x=filtered2[1*4];
+        trz_tk->y=filtered2[1*4+1];
+        trz_tk->width=filtered2[1*4+2]-trz_tk->x;
+        trz_tk->height=filtered2[1*4+3]-trz_tk->y;
+        
+        pTRZ trz_taskbtn=gettrzbycode(list,DOU_FORTUNEGIFT_DETAIL_EXECTASK);
+        if(!trz_taskbtn) return -1;
+        trz_taskbtn->x=filtered2[2*4];
+        trz_taskbtn->y=filtered2[2*4+1];
+        trz_taskbtn->width=filtered2[2*4+2]-trz_taskbtn->x;
+        trz_taskbtn->height=filtered2[2*4+3]-trz_taskbtn->y;
+
+
+        /*
+         * 处理倒计时
+         */
+        int timefiltered[1000*4]={0};
+        int rcTimeFiltered=0;
+        for(int idx=0;idx<rcCount;idx++) {
+            if(filtered2[1]>rcList[idx*4+3]&&
+               trz_fdi->y+trz_fdi->height<rcList[idx*4+1]) {
+                memcpy(&timefiltered[rcTimeFiltered*4],&rcList[idx*4],sizeof(int)*4);
+                rcTimeFiltered++;
+            }
+        }
+        qsort(timefiltered,rcTimeFiltered,sizeof(int)*4,cmpPosLeft);
+
+        int right=0;
+        int time_fetched=0;
+        for(int idx=0;idx<rcTimeFiltered;idx++) {
+            if(timefiltered[idx*4]>right) {
+                time_fetched++;
+                right=timefiltered[idx*4+2];
+                if(time_fetched==1) {
+                    pTRZ trz_hour=gettrzbycode(list,DOU_FORTUNEGIFT_COUNTDOWN_DETAIL);
+                    trz_hour->x=timefiltered[idx*4];
+                    trz_hour->y=timefiltered[idx*4+1];
+                    trz_hour->width=timefiltered[idx*4+2]-timefiltered[idx*4];
+                    trz_hour->height=timefiltered[idx*4+3]-timefiltered[idx*4+1];
+                } else if(time_fetched==2) {
+                    pTRZ trz_sec=gettrzbycode(list,DOU_FORTUNEGIFT_COUNTDOWN_DETAIL2);
+                    trz_sec->x=timefiltered[idx*4];
+                    trz_sec->y=timefiltered[idx*4+1];
+                    trz_sec->width=timefiltered[idx*4+2]-timefiltered[idx*4];
+                    trz_sec->height=timefiltered[idx*4+3]-timefiltered[idx*4+1];
+                }
+            }
+            if(time_fetched>=2) break;
+        }
+        return 0;
+
+    } else {
+        /*
+         * 设想的场景是此处只有两个矩形，任务矩形 和 执行任务按钮的矩形
+         */
+        return -1;
+    }
+}
+
+/** 
+ * watchlist_ocr
+ * 对关注列表进行识别，筛选出正在直播的主播列表
+ * 正在直播的主播列表：
+ * 包含直播间的名称、直播列表的位置等
+ * 直播间的名称列表，后续可能据此配置直播间的切换策略
+ * 直播列表的位置，用于执行切换直播间的操作（划屏和点击等）
+ */
+int watchlist_ocr(pTRZ list,char* img) {
+    /*
+     * 处理思路：
+     * 1、打开关注列表的图片，分析关注的直播间列表，筛选出直播的主播，记录列表、偏移
+     * 2、通过某种策略选中一个符合要求的直播间，点击切换
+     * --------------------------------------------
+     * 
+     * 当前的页面偏移，首先需要定义一个偏移基准，即页面最初的状态，
+     * 紧接着筛选关注列表
+     * 如果列表较长，需要滑动屏幕，一旦滑动，偏移即发生变化
+     * 在滑动的过程中，确定关注列表中的所有直播间，并严格建立此时此刻的各个直播间列表与偏移的对应关系
+     * 严格来讲，将向滚动条一样，建立pagesize/min/max/pos映射
+     * 
+     * --------------------------------------------
+     * 
+     */
+
+    return 0;
+}
